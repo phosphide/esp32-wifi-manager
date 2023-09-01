@@ -1013,12 +1013,23 @@ void wifi_manager( void * pvParameters ){
 			case WM_ORDER_START_WIFI_SCAN:
 				ESP_LOGD(TAG, "MESSAGE: ORDER_START_WIFI_SCAN");
 
-				/* if a scan is already in progress this message is simply ignored thanks to the WIFI_MANAGER_SCAN_BIT uxBit */
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
-				if(! (uxBits & WIFI_MANAGER_SCAN_BIT) ){
-					xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_SCAN_BIT);
-					ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, false));
-				}
+                /* if a scan is already in progress this message is simply ignored thanks to the WIFI_MANAGER_SCAN_BIT uxBit */
+                uxBits = xEventGroupGetBits(wifi_manager_event_group);
+                if (! (uxBits & WIFI_MANAGER_SCAN_BIT) ){
+                    if (! (uxBits & ( WIFI_MANAGER_REQUEST_STA_CONNECT_BIT | WIFI_MANAGER_REQUEST_RESTORE_STA_BIT) ) ) {
+                        esp_err_t res = esp_wifi_scan_start(&scan_config, false);
+                        if (res==ESP_ERR_WIFI_STATE) {
+                            // This might happen when connect retry is attempted while AP scan starts.. Just ignore it
+                            ESP_LOGE(TAG,"Wifi still in connect mode whan starting scan!");
+                        } else {
+                            // handle other errors
+                            ESP_ERROR_CHECK(res);
+                            xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_SCAN_BIT);
+                        }
+                    } else {
+                        // Cannot scan while connecting to AP
+                    }
+                }
 
 				/* callback */
 				if(cb_ptr_arr[msg.code]) (*cb_ptr_arr[msg.code])(NULL);
@@ -1066,7 +1077,8 @@ void wifi_manager( void * pvParameters ){
 					if(uxBits & WIFI_MANAGER_SCAN_BIT){
 						esp_wifi_scan_stop();
 					}
-					ESP_ERROR_CHECK(esp_wifi_connect());
+//                    ESP_ERROR_CHECK(esp_wifi_connect());
+                    esp_wifi_connect();
 				}
 
 				/* callback */
